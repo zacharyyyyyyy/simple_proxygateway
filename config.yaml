@@ -1,0 +1,11 @@
+timeout: 60
+port: ":8887"
+reverse_host:
+  - {service_name: "test", load_balance_mode: "rand", weight: 0}
+etcd:
+  username: "user"
+  password: "password"
+  endpoints: ["127.0.0.1:2379", "127.0.0.1:2378"]
+  dial_timeout: 5
+  dial_keepalive_timeout: 5
+  dial_keepalive_time: 30
