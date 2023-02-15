@@ -8,18 +8,19 @@ import (
 )
 
 type ReverseHost struct {
-	ServiceName    string `yaml:"service_name"`
-	LoadBalanceMod string `yaml:"load_balance_mode"`
-	Weight         int    `yaml:"weight"`
+	ServiceName     string `yaml:"service_name"`
+	LoadBalanceMode string `yaml:"load_balance_mode"`
 }
 
 type Etcd struct {
-	Endpoints            []string `yaml:"endpoints"`
-	UserName             string   `yaml:"username"`
-	Password             string   `yaml:"password"`
-	DialTimeout          int      `yaml:"dial_timeout"`
-	DialKeepAliveTimeout int      `yaml:"dial_keepalive_timeout"`
-	DialKeepAliveTime    int      `yaml:"dial_keepalive_time"`
+	Endpoints                   []string `yaml:"endpoints"`
+	UserName                    string   `yaml:"username"`
+	Password                    string   `yaml:"password"`
+	DialTimeout                 int      `yaml:"dial_timeout"`
+	DialKeepAliveTimeout        int      `yaml:"dial_keepalive_timeout"`
+	DialKeepAliveTime           int      `yaml:"dial_keepalive_time"`
+	LocalCacheDefaultExpiration int      `yaml:"local_cache_default_expiration"` //本地缓存默认过期时间
+	LocalCacheCleanUpTime       int      `yaml:"local_cache_clean_up_time"`      //本地缓存过期清理时间
 }
 
 type Client struct {

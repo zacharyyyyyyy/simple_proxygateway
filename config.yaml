@@ -1,7 +1,7 @@
 timeout: 60
 port: ":8887"
 reverse_host:
-  - {service_name: "test", load_balance_mode: "rand", weight: 0}
+  - {service_name: "test", load_balance_mode: "rand"}
 etcd:
   username: "user"
   password: "password"
@@ -9,3 +9,5 @@ etcd:
   dial_timeout: 5
   dial_keepalive_timeout: 5
   dial_keepalive_time: 30
+  local_cache_default_expiration: 10
+  local_cache_clean_up_time: 60
