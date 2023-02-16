@@ -24,7 +24,6 @@ type ServiceDiscover interface {
 
 type (
 	ServiceMapStruct struct {
-		Mode            string
 		ServiceUrlSlice []ServiceUrlStruct
 	}
 	ServiceUrlStruct struct {
@@ -37,9 +36,8 @@ type (
 	}
 )
 
-var (
-	etcdHandler *clientv3.Client
-)
+var etcdHandler *clientv3.Client
+
 var (
 	ServiceNotFoundErr = errors.New("service not found")
 	etcdInitError      = errors.New("etcd initialization failure")
@@ -74,11 +72,8 @@ func (etcdLocalCache *LocalCache) Stop() {
 
 func (etcdLocalCache *LocalCache) Get(serviceName string) (ServiceMapStruct, error) {
 
-	if hostJson, ok := etcdLocalCache.localCache.Get(serviceName); ok {
-		hostObj := ServiceMapStruct{}
-		hostJsonString := hostJson.(string)
-		_ = jsoniter.Unmarshal([]byte(hostJsonString), &hostObj)
-		return hostObj, nil
+	if hostObj, ok := etcdLocalCache.localCache.Get(serviceName); ok {
+		return hostObj.(ServiceMapStruct), nil
 	}
 	return ServiceMapStruct{}, ServiceNotFoundErr
 }
@@ -89,13 +84,13 @@ func (etcdLocalCache *LocalCache) discoverAllServices(serviceConfig config.Clien
 		wg.Add(1)
 		go func(serviceName string) {
 			defer wg.Done()
-			etcdLocalCache.discoverService(service.ServiceName, service.LoadBalanceMode, time.Duration(serviceConfig.Etcd.LocalCacheDefaultExpiration)*time.Second)
+			etcdLocalCache.discoverService(service.ServiceName, time.Duration(serviceConfig.Etcd.LocalCacheDefaultExpiration)*time.Second)
 		}(service.ServiceName)
 	}
 	wg.Wait()
 }
 
-func (etcdLocalCache *LocalCache) discoverService(serviceName string, balanceMode string, timeout time.Duration) {
+func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout time.Duration) {
 	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 	res, err := etcdHandler.Get(ctx, serviceName)
 	if err != nil {
@@ -103,9 +98,10 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, balanceMod
 		return
 	}
 	serviceUrlSlice := make([]ServiceUrlStruct, 0)
-	_ = jsoniter.Unmarshal(res.Kvs[0].Value, serviceUrlSlice)
+	for _, val := range res.Kvs {
+		_ = jsoniter.Unmarshal(val.Value, &serviceUrlSlice)
+	}
 	serviceMapStruct := ServiceMapStruct{
-		Mode:            balanceMode,
 		ServiceUrlSlice: serviceUrlSlice,
 	}
 	etcdLocalCache.localCache.Set(serviceName, serviceMapStruct, timeout)
@@ -116,13 +112,11 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, balanceMod
 func (etcdLocalCache *LocalCache) watch(reverseHost []config.ReverseHost, timeout time.Duration) {
 	for _, host := range reverseHost {
 		go func() {
-			ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
-			watchChan := etcdHandler.Watch(ctx, host.ServiceName)
-			cancel()
+			watchChan := etcdHandler.Watch(context.TODO(), host.ServiceName)
 			for {
 				select {
 				case watchRes := <-watchChan:
-					etcdEventHandle(etcdLocalCache.localCache, watchRes.Events, host.LoadBalanceMode, timeout)
+					etcdEventHandle(etcdLocalCache.localCache, watchRes.Events, timeout)
 				case <-etcdLocalCache.stop:
 					break
 				}
@@ -131,13 +125,12 @@ func (etcdLocalCache *LocalCache) watch(reverseHost []config.ReverseHost, timeou
 	}
 }
 
-func etcdEventHandle(cache *cache.Cache, events []*clientv3.Event, balanceMode string, timeout time.Duration) {
+func etcdEventHandle(cache *cache.Cache, events []*clientv3.Event, timeout time.Duration) {
 	for _, ev := range events {
 		if ev.Type == mvccpb.PUT {
 			serviceUrlSlice := make([]ServiceUrlStruct, 0)
-			_ = jsoniter.Unmarshal(ev.Kv.Value, serviceUrlSlice)
+			_ = jsoniter.Unmarshal(ev.Kv.Value, &serviceUrlSlice)
 			serviceMapStruct := ServiceMapStruct{
-				Mode:            balanceMode,
 				ServiceUrlSlice: serviceUrlSlice,
 			}
 			cache.Set(string(ev.Kv.Key), serviceMapStruct, timeout)

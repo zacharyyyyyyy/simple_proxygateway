@@ -7,27 +7,41 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/url"
-	"simple_proxygateway/logger"
+	"regexp"
 	"strings"
 	"time"
 
 	"simple_proxygateway/etcd"
+	"simple_proxygateway/logger"
+
+	"github.com/patrickmn/go-cache"
 )
 
 type transmitHandler interface {
 	getUrlString(req *http.Request) string
 }
 
-var transmitHandlerMap = make(map[string]transmitHandler)
+var (
+	transmitHandlerMap = make(map[string]transmitHandler)
+	localCache         *cache.Cache
+)
 
-func NewProxyHandler(serviceDiscover etcd.ServiceDiscover) http.Handler {
+func init() {
+	localCache = cache.New(3*time.Second, 10*time.Second)
+}
 
+func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode string) http.Handler {
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
-			u, _ := url.Parse("https://www.qq.com/")
+			reg := regexp.MustCompile(`\/`)
+			pathPieceSlice := reg.Split(req.URL.Path, -1)
+			serviceName := pathPieceSlice[1]
+			ip, _, _ := net.SplitHostPort(req.RemoteAddr)
+			transmitHost := getTransmitHostByCache(ip, serviceName, loadBalanceMode)
+			rawUrl := combineUrl(req.URL.Scheme, transmitHost, req.URL.Path, req.URL.RawQuery)
+			u, _ := url.Parse(rawUrl)
 			req.URL = u
 			req.Host = u.Host // 必须显示修改Host，否则转发可能失败
-			fmt.Println(u.Host)
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			log.Println("resp status:", resp.Status)
@@ -40,8 +54,7 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover) http.Handler {
 		ErrorLog: log.New(logger.Runtime, "ReverseProxy:", log.LstdFlags|log.Lshortfile),
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != nil {
-				log.Println("ErrorHandler catch err:", err)
-
+				logger.Runtime.Error(err.Error())
 				w.WriteHeader(http.StatusBadGateway)
 				_, _ = fmt.Fprintf(w, err.Error())
 			}
@@ -58,4 +71,40 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover) http.Handler {
 		},
 	}
 	return proxy
+}
+
+func register(modeName string, transmitHandler transmitHandler) {
+	transmitHandlerMap[modeName] = transmitHandler
+}
+
+func combineUrl(scheme string, transmitHost string, originPath string, rawQuery string) string {
+	if scheme != "" {
+		scheme = scheme + "://"
+	}
+	reg := regexp.MustCompile(`\/`)
+	pathPieceSlice := reg.Split(originPath, -1)
+	pathPieceSlice = pathPieceSlice[1:]
+	pathMix := strings.Join(pathPieceSlice[2:], "/")
+	if len(pathMix) > 0 {
+		pathMix = "/" + pathMix
+	}
+	if rawQuery != "" {
+		rawQuery = "?" + rawQuery
+	}
+	return scheme + transmitHost + pathMix + rawQuery
+}
+
+func getTransmitHostByCache(ip string, serviceName string, loadBalanceMode string) string {
+	if ip == "::1" {
+		ip = "127.0.0.1"
+	}
+	if transmitHost, ok := localCache.Get(ip + "_" + serviceName); ok {
+		return transmitHost.(string)
+	}
+	return getTransmitHost(ip, serviceName, loadBalanceMode)
+}
+
+func getTransmitHost(ip string, serviceName string, loadBalanceMode string) string {
+	//todo
+	return ""
 }

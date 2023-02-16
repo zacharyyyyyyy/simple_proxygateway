@@ -8,8 +8,7 @@ import (
 )
 
 type ReverseHost struct {
-	ServiceName     string `yaml:"service_name"`
-	LoadBalanceMode string `yaml:"load_balance_mode"`
+	ServiceName string `yaml:"service_name"`
 }
 
 type Etcd struct {
@@ -24,10 +23,11 @@ type Etcd struct {
 }
 
 type Client struct {
-	ReverseHost []ReverseHost `yaml:"reverse_host"`
-	Etcd        Etcd          `yaml:"etcd"`
-	TimeOut     int           `yaml:"timeout"`
-	Port        string        `yaml:"port"`
+	ReverseHost     []ReverseHost `yaml:"reverse_host"`
+	Etcd            Etcd          `yaml:"etcd"`
+	TimeOut         int           `yaml:"timeout"`
+	Port            string        `yaml:"port"`
+	LoadBalanceMode string        `yaml:"load_balance_mode"`
 }
 
 const (
