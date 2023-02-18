@@ -1,8 +1,9 @@
 package transmit
 
 import (
-	"simple_proxygateway/config"
 	"sync/atomic"
+
+	"simple_proxygateway/config"
 )
 
 type roundRobinTransmit struct {

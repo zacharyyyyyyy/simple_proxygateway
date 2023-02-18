@@ -2,6 +2,7 @@ package transmit
 
 import (
 	"hash/crc32"
+
 	"simple_proxygateway/config"
 )
 

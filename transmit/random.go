@@ -2,8 +2,9 @@ package transmit
 
 import (
 	"math/rand"
-	"simple_proxygateway/config"
 	"time"
+
+	"simple_proxygateway/config"
 )
 
 type randomTransmit struct {

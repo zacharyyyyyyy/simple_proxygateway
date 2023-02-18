@@ -9,12 +9,16 @@ import (
 	"simple_proxygateway/transmit"
 )
 
+func initRouter(handler http.Handler) {
+	http.Handle("/", handler)
+}
+
 func main() {
 	proxyConfig := &config.Client{}
 	config.LoadConf(proxyConfig, "config.yaml")
 	ServiceDiscover := etcd.NewEtcd(*proxyConfig)
 	proxy := transmit.NewProxyHandler(ServiceDiscover, proxyConfig.LoadBalanceMode)
-	http.Handle("/", proxy)
+	initRouter(proxy)
 	if err := http.ListenAndServe(proxyConfig.Port, nil); err != nil {
 		log.Fatal(err)
 	}

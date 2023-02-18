@@ -2,7 +2,6 @@ package transmit
 
 import (
 	"fmt"
-	jsoniter "github.com/json-iterator/go"
 	"log"
 	"net"
 	"net/http"
@@ -15,6 +14,7 @@ import (
 	"simple_proxygateway/etcd"
 	"simple_proxygateway/logger"
 
+	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 )
 
@@ -28,13 +28,15 @@ type serviceUrlStruct struct {
 }
 
 var (
-	transmitHandlerMap = make(map[string]transmitHandler)
-	localCache         *cache.Cache
-	defaultHost        = "127.0.0.1"
+	transmitHandlerMap          = make(map[string]transmitHandler)
+	localCache                  *cache.Cache
+	defaultHost                 = "127.0.0.1"
+	localCacheDefaultExpiration = 3
+	localCacheCleanUpTime       = 10
 )
 
 func init() {
-	localCache = cache.New(3*time.Second, 10*time.Second)
+	localCache = cache.New(time.Duration(localCacheDefaultExpiration)*time.Second, time.Duration(localCacheCleanUpTime)*time.Second)
 }
 
 func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode string) http.Handler {
@@ -135,7 +137,9 @@ func getTransmitHost(ip string, serviceName string, loadBalanceMode string, serv
 			for _, urlStruct := range serviceSlice.ServiceUrlSlice {
 				urlSlice = append(urlSlice, serviceUrlStruct{url: urlStruct.Url, weight: urlStruct.Weight})
 			}
-			return transmitHandler.getUrlString(urlSlice, ip)
+			hostResult := transmitHandler.getUrlString(urlSlice, ip)
+			localCache.Set(ip+"_"+serviceName, hostResult, time.Duration(localCacheDefaultExpiration)*time.Second)
+			return hostResult
 		}
 	}
 	logger.Runtime.Error(fmt.Errorf("transmit error : %w", err).Error())

@@ -3,15 +3,21 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
+	"net/http"
+	"net/http/httptest"
+	"reflect"
+	"strings"
+	"testing"
+	"time"
+
+	"simple_proxygateway/config"
+	"simple_proxygateway/etcd"
+	"simple_proxygateway/transmit"
+
 	jsoniter "github.com/json-iterator/go"
 	. "github.com/smartystreets/goconvey/convey"
 	clientv3 "go.etcd.io/etcd/client/v3"
-	"log"
-	"reflect"
-	"simple_proxygateway/config"
-	"simple_proxygateway/etcd"
-	"testing"
-	"time"
 )
 
 var (
@@ -38,8 +44,7 @@ func TestEtcd(t *testing.T) {
 	Convey("add etcd data", t, func() {
 		respL, err := etcdHandler.Grant(context.TODO(), 30)
 		if err != nil {
-			fmt.Println(err)
-			return
+			t.Fatal(err)
 		}
 		urlSilce := []etcd.ServiceUrlStruct{
 			{
@@ -54,7 +59,7 @@ func TestEtcd(t *testing.T) {
 		jsonStr, _ := jsoniter.Marshal(urlSilce)
 		_, err = etcdHandler.Put(context.TODO(), proxyConfig.ReverseHost[0].ServiceName, string(jsonStr), clientv3.WithLease(respL.ID))
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 		Convey("check local data", func() {
 			localData, err := ServiceDiscover.Get(proxyConfig.ReverseHost[0].ServiceName)
@@ -75,8 +80,7 @@ func TestEtcd(t *testing.T) {
 	Convey("edit etcd data", t, func() {
 		respL, err := etcdHandler.Grant(context.TODO(), 30)
 		if err != nil {
-			fmt.Println(err)
-			return
+			t.Fatal(err)
 		}
 		urlSilce := []etcd.ServiceUrlStruct{
 			{
@@ -91,7 +95,7 @@ func TestEtcd(t *testing.T) {
 		jsonStr, _ := jsoniter.Marshal(urlSilce)
 		_, err = etcdHandler.Put(context.TODO(), proxyConfig.ReverseHost[0].ServiceName, string(jsonStr), clientv3.WithLease(respL.ID))
 		if err != nil {
-			log.Fatal(err)
+			t.Fatal(err)
 		}
 		Convey("check local data", func() {
 			localData, err := ServiceDiscover.Get(proxyConfig.ReverseHost[0].ServiceName)
@@ -109,4 +113,37 @@ func TestEtcd(t *testing.T) {
 		})
 	})
 
+}
+
+func TestTransmit(t *testing.T) {
+	ServiceDiscover := etcd.NewEtcd(*proxyConfig)
+	proxy := transmit.NewProxyHandler(ServiceDiscover, proxyConfig.LoadBalanceMode)
+	initRouter(proxy)
+	testsStruct := []struct {
+		testName string
+		method   string
+		target   string
+		code     int
+	}{
+		{
+			testName: "transmit test",
+			method:   "POST",
+			target:   "/te/st?key=1&key1=2",
+			code:     404,
+		},
+	}
+	for _, testsRow := range testsStruct {
+		Convey(testsRow.testName, t, func() {
+			w := httptest.NewRecorder()
+			req := httptest.NewRequest(testsRow.method, testsRow.target, strings.NewReader(""))
+			req.Header.Set("Content-type", "application/x-www-form-urlencoded")
+			http.DefaultServeMux.ServeHTTP(w, req)
+			result := make(map[string]interface{}, 0)
+			err := jsoniter.Unmarshal(w.Body.Bytes(), &result)
+			if err != nil {
+				t.Fatal(err)
+			}
+			So(result["Code"], ShouldEqual, testsRow.code)
+		})
+	}
 }
