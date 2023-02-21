@@ -48,11 +48,8 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 			req.Host = u.Host // 必须显示修改Host，否则转发可能失败
 		},
 		ModifyResponse: func(resp *http.Response) error {
-			log.Println("resp status:", resp.Status)
-			log.Println("resp headers:")
-			for hk, hv := range resp.Header {
-				log.Println(hk, ":", strings.Join(hv, ","))
-			}
+			infoLog := fmt.Sprintf("source host:%s,path:%s,code:%d", resp.Request.URL.Host, resp.Request.URL.Path, resp.StatusCode)
+			logger.Runtime.Info(infoLog)
 			return nil
 		},
 		ErrorLog: log.New(logger.Runtime, "ReverseProxy:", log.LstdFlags|log.Lshortfile),
