@@ -67,7 +67,7 @@ func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 	}
 	localCacheStruct.discoverAllServices(serviceConfig)
 	go localCacheStruct.watch(serviceConfig.ReverseHost, localCacheExpirationTime)
-	runtime.SetFinalizer(localCacheStruct, (*localCacheStruct).Stop)
+	runtime.SetFinalizer(localCacheStruct, (*LocalCache).Stop)
 	return localCacheStruct
 }
 
@@ -112,10 +112,12 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout ti
 	for _, val := range res.Kvs {
 		_ = jsoniter.Unmarshal(val.Value, &serviceUrlSlice)
 	}
-	serviceMapStruct := ServiceMapStruct{
-		ServiceUrlSlice: serviceUrlSlice,
+	if len(serviceUrlSlice) > 0 {
+		serviceMapStruct := ServiceMapStruct{
+			ServiceUrlSlice: serviceUrlSlice,
+		}
+		etcdLocalCache.localCache.Set(serviceName, serviceMapStruct, timeout)
 	}
-	etcdLocalCache.localCache.Set(serviceName, serviceMapStruct, timeout)
 }
 
 // 监听服务变化
