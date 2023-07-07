@@ -82,6 +82,7 @@ func (etcdLocalCache *LocalCache) discoverAllServices(serviceConfig config.Clien
 	var wg sync.WaitGroup
 	for _, service := range serviceConfig.ReverseHost {
 		wg.Add(1)
+		service := service
 		go func(serviceName string) {
 			defer wg.Done()
 			etcdLocalCache.discoverService(service.ServiceName, time.Duration(serviceConfig.Etcd.LocalCacheDefaultExpiration)*time.Second)
@@ -108,9 +109,10 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout ti
 	cancel()
 }
 
-//监听服务变化
+// 监听服务变化
 func (etcdLocalCache *LocalCache) watch(reverseHost []config.ReverseHost, timeout time.Duration) {
 	for _, host := range reverseHost {
+		host := host
 		go func() {
 			watchChan := etcdHandler.Watch(context.TODO(), host.ServiceName)
 			for {
