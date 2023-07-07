@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"log"
+	"runtime"
 	"sync"
 	"time"
 
@@ -62,6 +63,7 @@ func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 	}
 	localCacheStruct.discoverAllServices(serviceConfig)
 	go localCacheStruct.watch(serviceConfig.ReverseHost, time.Duration(etcdConfig.LocalCacheDefaultExpiration)*time.Second)
+	runtime.SetFinalizer(localCacheStruct, (*localCacheStruct).Stop)
 	return localCacheStruct
 }
 
