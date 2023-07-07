@@ -92,7 +92,7 @@ func (etcdLocalCache *LocalCache) discoverAllServices(serviceConfig config.Clien
 }
 
 func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout time.Duration) {
-	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
 	res, err := etcdHandler.Get(ctx, serviceName)
 	if err != nil {
 		logger.Runtime.Error("discover service err:" + err.Error())
@@ -106,7 +106,6 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout ti
 		ServiceUrlSlice: serviceUrlSlice,
 	}
 	etcdLocalCache.localCache.Set(serviceName, serviceMapStruct, timeout)
-	cancel()
 }
 
 // 监听服务变化
