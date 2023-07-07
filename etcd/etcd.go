@@ -37,7 +37,10 @@ type (
 	}
 )
 
-var etcdHandler *clientv3.Client
+var (
+	etcdHandler              *clientv3.Client
+	localCacheExpirationTime time.Duration
+)
 
 var (
 	ServiceNotFoundErr = errors.New("service not found")
@@ -48,7 +51,8 @@ func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 	var err error
 	stopChan := make(chan struct{}, 1)
 	etcdConfig := serviceConfig.Etcd
-	localCache := cache.New(time.Duration(etcdConfig.LocalCacheDefaultExpiration)*time.Second, time.Duration(etcdConfig.LocalCacheCleanUpTime)*time.Second)
+	localCacheExpirationTime = time.Duration(etcdConfig.LocalCacheDefaultExpiration) * time.Second
+	localCache := cache.New(localCacheExpirationTime, time.Duration(etcdConfig.LocalCacheCleanUpTime)*time.Second)
 	localCacheStruct := &LocalCache{stop: stopChan, localCache: localCache}
 	etcdHandler, err = clientv3.New(clientv3.Config{
 		Username:             etcdConfig.UserName,
@@ -62,7 +66,7 @@ func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 		log.Fatal(etcdInitError)
 	}
 	localCacheStruct.discoverAllServices(serviceConfig)
-	go localCacheStruct.watch(serviceConfig.ReverseHost, time.Duration(etcdConfig.LocalCacheDefaultExpiration)*time.Second)
+	go localCacheStruct.watch(serviceConfig.ReverseHost, localCacheExpirationTime)
 	runtime.SetFinalizer(localCacheStruct, (*localCacheStruct).Stop)
 	return localCacheStruct
 }
@@ -73,7 +77,11 @@ func (etcdLocalCache *LocalCache) Stop() {
 }
 
 func (etcdLocalCache *LocalCache) Get(serviceName string) (ServiceMapStruct, error) {
-
+	if hostObj, ok := etcdLocalCache.localCache.Get(serviceName); ok {
+		return hostObj.(ServiceMapStruct), nil
+	}
+	//缓存不存在则更新缓存
+	etcdLocalCache.discoverService(serviceName, localCacheExpirationTime)
 	if hostObj, ok := etcdLocalCache.localCache.Get(serviceName); ok {
 		return hostObj.(ServiceMapStruct), nil
 	}
