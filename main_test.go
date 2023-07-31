@@ -48,11 +48,11 @@ func TestEtcd(t *testing.T) {
 		}
 		urlSilce := []etcd.ServiceUrlStruct{
 			{
-				Url:    "127.0.0.1",
+				Url:    "127.0.0.1:80",
 				Weight: 0,
 			},
 			{
-				Url:    "127.0.0.4",
+				Url:    "127.0.0.4:80",
 				Weight: 1,
 			},
 		}
@@ -84,11 +84,11 @@ func TestEtcd(t *testing.T) {
 		}
 		urlSilce := []etcd.ServiceUrlStruct{
 			{
-				Url:    "127.0.0.1",
+				Url:    "127.0.0.1:80",
 				Weight: 0,
 			},
 			{
-				Url:    "127.0.0.5",
+				Url:    "127.0.0.5:80",
 				Weight: 1,
 			},
 		}
@@ -117,7 +117,7 @@ func TestEtcd(t *testing.T) {
 
 func TestTransmit(t *testing.T) {
 	ServiceDiscover := etcd.NewEtcd(*proxyConfig)
-	proxy := transmit.NewProxyHandler(ServiceDiscover, proxyConfig.LoadBalanceMode)
+	proxy := transmit.NewProxyHandler(ServiceDiscover, proxyConfig.LoadBalanceMode, *proxyConfig)
 	initRouter(proxy)
 	testsStruct := []struct {
 		testName string
@@ -143,7 +143,8 @@ func TestTransmit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			So(result["Code"], ShouldEqual, testsRow.code)
+			So(w.Code, ShouldEqual, testsRow.code)
+
 		})
 	}
 }

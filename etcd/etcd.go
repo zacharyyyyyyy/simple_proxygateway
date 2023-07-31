@@ -19,7 +19,7 @@ import (
 
 type ServiceDiscover interface {
 	Get(serviceName string) (ServiceMapStruct, error)
-	Stop()
+	Exit()
 	discoverAllServices(serviceConfig config.Client)
 }
 
@@ -32,8 +32,9 @@ type (
 		Weight int
 	}
 	LocalCache struct {
-		stop       chan struct{}
-		localCache *cache.Cache
+		stop          chan struct{}
+		closeComplete chan struct{}
+		localCache    *cache.Cache
 	}
 )
 
@@ -49,11 +50,10 @@ var (
 
 func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 	var err error
-	stopChan := make(chan struct{}, 1)
 	etcdConfig := serviceConfig.Etcd
 	localCacheExpirationTime = time.Duration(etcdConfig.LocalCacheDefaultExpiration) * time.Second
 	localCache := cache.New(localCacheExpirationTime, time.Duration(etcdConfig.LocalCacheCleanUpTime)*time.Second)
-	localCacheStruct := &LocalCache{stop: stopChan, localCache: localCache}
+	localCacheStruct := &LocalCache{stop: make(chan struct{}, 1), localCache: localCache, closeComplete: make(chan struct{}, 1)}
 	etcdHandler, err = clientv3.New(clientv3.Config{
 		Username:             etcdConfig.UserName,
 		Password:             etcdConfig.Password,
@@ -67,13 +67,8 @@ func NewEtcd(serviceConfig config.Client) ServiceDiscover {
 	}
 	localCacheStruct.discoverAllServices(serviceConfig)
 	go localCacheStruct.watch(serviceConfig.ReverseHost, localCacheExpirationTime)
-	runtime.SetFinalizer(localCacheStruct, (*LocalCache).Stop)
+	runtime.SetFinalizer(localCacheStruct, (*LocalCache).Exit)
 	return localCacheStruct
-}
-
-func (etcdLocalCache *LocalCache) Stop() {
-	close(etcdLocalCache.stop)
-	etcdLocalCache.localCache.Flush()
 }
 
 func (etcdLocalCache *LocalCache) Get(serviceName string) (ServiceMapStruct, error) {
@@ -86,6 +81,23 @@ func (etcdLocalCache *LocalCache) Get(serviceName string) (ServiceMapStruct, err
 		return hostObj.(ServiceMapStruct), nil
 	}
 	return ServiceMapStruct{}, ServiceNotFoundErr
+}
+
+func (etcdLocalCache *LocalCache) Delete(serviceName string) {
+	etcdLocalCache.removeService(serviceName)
+	etcdLocalCache.localCache.Delete(serviceName)
+}
+
+func (etcdLocalCache *LocalCache) Exit() {
+	close(etcdLocalCache.stop)
+	closeTimer := time.NewTimer(10 * time.Second)
+	select {
+	case <-etcdLocalCache.closeComplete:
+	case <-closeTimer.C:
+		logger.Runtime.Error("etcd watcher stop timeout!")
+	}
+	etcdLocalCache.localCache.Flush()
+	etcdHandler.Close()
 }
 
 func (etcdLocalCache *LocalCache) discoverAllServices(serviceConfig config.Client) {
@@ -120,22 +132,36 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout ti
 	}
 }
 
+func (etcdLocalCache *LocalCache) removeService(serviceName string) {
+	ctx, _ := context.WithTimeout(context.Background(), 3*time.Second)
+	_, err := etcdHandler.Delete(ctx, serviceName)
+	if err != nil {
+		logger.Runtime.Error("delete service err:" + err.Error())
+	}
+}
+
 // 监听服务变化
 func (etcdLocalCache *LocalCache) watch(reverseHost []config.ReverseHost, timeout time.Duration) {
+	var wg sync.WaitGroup
 	for _, host := range reverseHost {
 		host := host
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			watchChan := etcdHandler.Watch(context.TODO(), host.ServiceName)
+		LOOP:
 			for {
 				select {
 				case watchRes := <-watchChan:
 					etcdEventHandle(etcdLocalCache.localCache, watchRes.Events, timeout)
 				case <-etcdLocalCache.stop:
-					break
+					break LOOP
 				}
 			}
 		}()
 	}
+	wg.Wait()
+	etcdLocalCache.closeComplete <- struct{}{}
 }
 
 func etcdEventHandle(cache *cache.Cache, events []*clientv3.Event, timeout time.Duration) {

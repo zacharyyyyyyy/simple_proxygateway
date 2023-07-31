@@ -1,12 +1,28 @@
 timeout: 60
 port: ":8887"
+default_url: "http://127.0.0.1:9090"
 load_balance_mode: "rand"
+ip_table: []
+restrictor:
+  open: true
+  rate: 50
+  max_token: 200
+  wait_time: 3
+http_transport:
+  dial_time_out: 60
+  dial_keep_alive: 60
+  max_idle_conns: 100
+  max_idle_conns_per_host: 100
+  max_conns_per_host: 300
+  idle_conn_timeout: 90
+  tls_handshake_timeout: 10
+  expect_continue_timeout: 1
 reverse_host:
-  - {service_name: "test"}
+  - { service_name: "test" }
 etcd:
   username: ""
   password: ""
-  endpoints: ["127.0.0.1:2379"]
+  endpoints: [ "127.0.0.1:2379" ]
   dial_timeout: 5
   dial_keepalive_timeout: 5
   dial_keepalive_time: 30
