@@ -10,6 +10,7 @@ import (
 	"net/url"
 	"regexp"
 	"simple_proxygateway/config"
+	"simple_proxygateway/transmit/middleware"
 	"strings"
 	"time"
 
@@ -43,14 +44,19 @@ func init() {
 
 func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode string, proxyConfig config.Client) http.Handler {
 	defaultUrl = proxyConfig.DefaultUrl
+	middleware.Limiter.SetConfig(proxyConfig)
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
-			rawUrl := getRawUrl(req.URL, req.RemoteAddr, loadBalanceMode, serviceDiscover)
+			middlewareResult := middleware.Limiter.Handle(req.RemoteAddr)
+			var rawUrl string
+			if middlewareResult {
+				rawUrl = getRawUrl(req.URL, req.RemoteAddr, loadBalanceMode, serviceDiscover)
+			} else {
+				rawUrl = ""
+			}
 			u, _ := url.Parse(rawUrl)
 			req.URL = u
 			req.Host = u.Host // 必须显示修改Host，否则转发可能失败
-			fmt.Println("director host:", u.Host)
-			fmt.Println("director:", u.Host, u.Path)
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			infoLog := fmt.Sprintf("source host:%s,path:%s,code:%d", resp.Request.URL.Host, resp.Request.URL.Path, resp.StatusCode)
@@ -60,7 +66,6 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 		ErrorLog: log.New(logger.Runtime, "ReverseProxy:", log.LstdFlags|log.Lshortfile),
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != nil {
-				fmt.Println("errHandler:", r.Host, r.URL.Host, r.URL.Path, r.URL.RawQuery)
 				logger.Runtime.Error(err.Error())
 				w.Header().Set("Content-Type", "application/json")
 				//Host 为空时，默认为限流或ip黑名单等限制
@@ -113,7 +118,6 @@ func getRawUrl(reqUrl *url.URL, originRemoteAddr string, loadBalanceMode string,
 	if transmitHost == "" {
 		transmitHost = getTransmitHost(ip, serviceName, loadBalanceMode, serviceDiscover)
 	}
-	fmt.Println("scheme:", reqUrl.Scheme)
 	rawUrl := combineUrl(reqUrl.Scheme, transmitHost, pathPieceSlice[2:], reqUrl.RawQuery)
 	return rawUrl
 }

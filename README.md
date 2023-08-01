@@ -16,7 +16,9 @@ val传输结构 :
 ````
 * 基于httputil.ReverseProxy作url转发，提供ip hash,随机，轮询及权重四种负载均衡模式
 * 目前默认path第一位为对应转发服务，即127.0.0.1:8080/test/get?val=1  test为对应服务
-###文件结构
+* 目前提供黑名单&限流中间件
+
+### 文件结构
 <details>
 <pre><code>
 ├── main.go 程序入口
@@ -28,6 +30,7 @@ val传输结构 :
 ├── etcd  基于etcd服务发现等逻辑
 │
 ├── transmit  转发部分逻辑
+│     └── middleware 转发中间件
 │
 └── output  日志输出相关
 </code></pre>

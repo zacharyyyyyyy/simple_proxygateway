@@ -143,6 +143,7 @@ func TestTransmit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
+
 			So(w.Code, ShouldEqual, testsRow.code)
 
 		})
