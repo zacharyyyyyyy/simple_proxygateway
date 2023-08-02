@@ -37,6 +37,18 @@ type (
 		MaxToken int  `yaml:"max_token"`
 		WaitTime int  `yaml:"wait_time"`
 	}
+	ElasticSearch struct {
+		Username     string `yaml:"username"`
+		Password     string `yaml:"password"`
+		Host         string `yaml:"host"`
+		Port         string `yaml:"port"`
+		Index        string `yaml:"index"`
+		BulkMaxCount int    `yaml:"bulk_max_count"`
+	}
+	Collector struct {
+		Switch string        `yaml:"switch"`
+		Es     ElasticSearch `yaml:"es"`
+	}
 	Client struct {
 		ReverseHost     []ReverseHost `yaml:"reverse_host"`
 		Etcd            Etcd          `yaml:"etcd"`
@@ -47,6 +59,8 @@ type (
 		HttpTransport   HttpTransport `yaml:"http_transport"`
 		IpTable         []string      `yaml:"ip_table"`
 		Restrictor      Restrictor    `yaml:"restrictor"`
+		OpenCollector   bool          `yaml:"open_collector"`
+		Collector       Collector     `yaml:"collector"`
 	}
 )
 

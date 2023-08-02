@@ -3,6 +3,7 @@ package etcd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"log"
 	"runtime"
 	"sync"
@@ -98,6 +99,7 @@ func (etcdLocalCache *LocalCache) Exit() {
 	}
 	etcdLocalCache.localCache.Flush()
 	etcdHandler.Close()
+	fmt.Println("etcd stop!")
 }
 
 func (etcdLocalCache *LocalCache) discoverAllServices(serviceConfig config.Client) {

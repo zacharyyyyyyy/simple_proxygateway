@@ -48,24 +48,32 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 	proxy := &httputil.ReverseProxy{
 		Director: func(req *http.Request) {
 			middlewareResult := middleware.Limiter.Handle(req.RemoteAddr)
-			var rawUrl string
+			var rawUrl, serviceName string
 			if middlewareResult {
-				rawUrl = getRawUrl(req.URL, req.RemoteAddr, loadBalanceMode, serviceDiscover)
+				rawUrl, serviceName = getRawUrlAndServiceName(req.URL, req.RemoteAddr, loadBalanceMode, serviceDiscover)
 			} else {
-				rawUrl = ""
+				rawUrl, serviceName = "", ""
 			}
 			u, _ := url.Parse(rawUrl)
 			req.URL = u
 			req.Host = u.Host // 必须显示修改Host，否则转发可能失败
+			req.Header.Add("Service", serviceName)
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			infoLog := fmt.Sprintf("source host:%s,path:%s,code:%d", resp.Request.URL.Host, resp.Request.URL.Path, resp.StatusCode)
 			logger.Runtime.Info(infoLog)
+			resp.Header.Del("Service")
 			return nil
 		},
 		ErrorLog: log.New(logger.Runtime, "ReverseProxy:", log.LstdFlags|log.Lshortfile),
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != nil {
+				fmt.Println("host:", r.Host)
+				fmt.Println("url host:", r.URL.Host)
+				fmt.Println("url path:", r.URL.Path)
+				fmt.Println("header:", r.Header.Get("Service"))
+				r.Header.Del("Service")
+				fmt.Println("header:", r.Header.Get("Service"))
 				logger.Runtime.Error(err.Error())
 				w.Header().Set("Content-Type", "application/json")
 				//Host 为空时，默认为限流或ip黑名单等限制
@@ -109,7 +117,7 @@ func register(modeName string, transmitHandler transmitHandler) {
 	transmitHandlerMap[modeName] = transmitHandler
 }
 
-func getRawUrl(reqUrl *url.URL, originRemoteAddr string, loadBalanceMode string, serviceDiscover etcd.ServiceDiscover) string {
+func getRawUrlAndServiceName(reqUrl *url.URL, originRemoteAddr string, loadBalanceMode string, serviceDiscover etcd.ServiceDiscover) (string, string) {
 	reg := regexp.MustCompile(`\/`)
 	pathPieceSlice := reg.Split(reqUrl.Path, -1)
 	serviceName := pathPieceSlice[1]
@@ -119,7 +127,7 @@ func getRawUrl(reqUrl *url.URL, originRemoteAddr string, loadBalanceMode string,
 		transmitHost = getTransmitHost(ip, serviceName, loadBalanceMode, serviceDiscover)
 	}
 	rawUrl := combineUrl(reqUrl.Scheme, transmitHost, pathPieceSlice[2:], reqUrl.RawQuery)
-	return rawUrl
+	return rawUrl, serviceName
 }
 
 func combineUrl(scheme string, transmitHost string, originPathSlice []string, rawQuery string) string {
