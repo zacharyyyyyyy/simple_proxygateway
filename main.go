@@ -6,10 +6,10 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
-	"simple_proxygateway/collector"
 	"syscall"
 	"time"
 
+	"simple_proxygateway/collector"
 	"simple_proxygateway/config"
 	"simple_proxygateway/etcd"
 	"simple_proxygateway/transmit"

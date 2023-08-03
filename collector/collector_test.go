@@ -1,14 +1,17 @@
 package collector
 
 import (
+	"context"
 	"fmt"
-	"github.com/olivere/elastic/v7"
 	"log"
-	"simple_proxygateway/config"
-	"simple_proxygateway/logger"
+	"reflect"
 	"testing"
 	"time"
 
+	"simple_proxygateway/config"
+	"simple_proxygateway/logger"
+
+	"github.com/olivere/elastic/v7"
 	. "github.com/smartystreets/goconvey/convey"
 )
 
@@ -38,6 +41,7 @@ func TestMain(m *testing.M) {
 func TestRegister(t *testing.T) {
 	Convey("check builderMap", t, func() {
 		fmt.Println(len(builderMap))
+		fmt.Println(builderMap)
 		So(len(builderMap), ShouldEqual, 1)
 	})
 }
@@ -45,14 +49,34 @@ func TestRegister(t *testing.T) {
 func TestEs(t *testing.T) {
 	Convey("new collector", t, func() {
 		NewCollector(*proxyConfig)
-		Convey("write data", func() {
-			Write("test")
-			Convey("wait for flush", func() {
-				time.Sleep(6 * time.Second)
-				Convey("check es data", func() {
-
-					//result, err := esClient.Get().Index(proxyConfig.Collector.Es.Index).Type("_doc").Do(context.Background())
-
+		Convey("clear es", func() {
+			esClient.DeleteIndex(proxyConfig.Collector.Es.Index).Do(context.Background())
+			Convey("write data", func() {
+				type w struct {
+					Name string
+					Age  int
+				}
+				b := w{
+					Name: "te",
+					Age:  10,
+				}
+				dataChan <- b
+				Convey("wait for flush", func() {
+					time.Sleep(7 * time.Second)
+					Convey("check es data", func() {
+						result, err := esClient.Search(proxyConfig.Collector.Es.Index).Do(context.Background())
+						if err != nil {
+							log.Fatal(err)
+						}
+						var data w
+						fmt.Println(result.Hits.TotalHits.Value)
+						fmt.Println(result.Status)
+						So(result.Hits.TotalHits.Value, ShouldEqual, 1)
+						for _, val := range result.Each(reflect.TypeOf(data)) {
+							So(val.(w).Name, ShouldEqual, "te")
+						}
+						esClient.DeleteIndex(proxyConfig.Collector.Es.Index).Do(context.Background())
+					})
 				})
 			})
 		})

@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"reflect"
+	"simple_proxygateway/collector"
 	"strings"
 	"testing"
 	"time"
@@ -29,6 +30,7 @@ func TestMain(m *testing.M) {
 	var err error
 	proxyConfig = &config.Client{}
 	config.LoadConf(proxyConfig, "config.yaml")
+	collector.NewCollector(*proxyConfig)
 	etcdHandler, err = clientv3.New(clientv3.Config{
 		Endpoints:   []string{"127.0.0.1:2379"},
 		DialTimeout: 5 * time.Second,
@@ -143,7 +145,7 @@ func TestTransmit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-
+			time.Sleep(7 * time.Second)
 			So(w.Code, ShouldEqual, testsRow.code)
 
 		})

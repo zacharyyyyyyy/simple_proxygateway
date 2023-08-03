@@ -9,8 +9,10 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
+	"simple_proxygateway/collector"
 	"simple_proxygateway/config"
 	"simple_proxygateway/transmit/middleware"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,22 +60,27 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 			req.URL = u
 			req.Host = u.Host // 必须显示修改Host，否则转发可能失败
 			req.Header.Add("Service", serviceName)
+			req.Header.Add("Transmit-Time", strconv.FormatInt(time.Now().Unix(), 10))
 		},
 		ModifyResponse: func(resp *http.Response) error {
 			infoLog := fmt.Sprintf("source host:%s,path:%s,code:%d", resp.Request.URL.Host, resp.Request.URL.Path, resp.StatusCode)
 			logger.Runtime.Info(infoLog)
-			resp.Header.Del("Service")
+			go func() {
+				//转发记录采集
+				transmitTime, _ := strconv.Atoi(resp.Request.Header.Get("Transmit-Time"))
+				collector.Write(collector.EsMsg{
+					ServiceName:  resp.Request.Header.Get("Service"),
+					TransmitTime: transmitTime,
+					ResultTime:   int(time.Now().Unix()),
+					Host:         resp.Request.Host,
+					StatusCode:   resp.StatusCode,
+				})
+			}()
 			return nil
 		},
 		ErrorLog: log.New(logger.Runtime, "ReverseProxy:", log.LstdFlags|log.Lshortfile),
 		ErrorHandler: func(w http.ResponseWriter, r *http.Request, err error) {
 			if err != nil {
-				fmt.Println("host:", r.Host)
-				fmt.Println("url host:", r.URL.Host)
-				fmt.Println("url path:", r.URL.Path)
-				fmt.Println("header:", r.Header.Get("Service"))
-				r.Header.Del("Service")
-				fmt.Println("header:", r.Header.Get("Service"))
 				logger.Runtime.Error(err.Error())
 				w.Header().Set("Content-Type", "application/json")
 				//Host 为空时，默认为限流或ip黑名单等限制
@@ -93,6 +100,17 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 					errStruct.Data = ""
 					errStruct.Code = http.StatusNotFound
 				}
+				go func() {
+					//转发记录采集
+					transmitTime, _ := strconv.Atoi(r.Header.Get("Transmit-Time"))
+					collector.Write(collector.EsMsg{
+						ServiceName:  r.Header.Get("Service"),
+						TransmitTime: transmitTime,
+						ResultTime:   int(time.Now().Unix()),
+						Host:         r.Host,
+						StatusCode:   errStruct.Code,
+					})
+				}()
 				errJson, _ := jsoniter.Marshal(errStruct)
 				w.Write(errJson)
 			}

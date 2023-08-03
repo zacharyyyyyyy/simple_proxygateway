@@ -1,7 +1,7 @@
 # simple_proxygateway
 ## 简易服务发现代理网关
 
-* 基于etcd服务发现，利用go-cache做本地缓存
+
 
 ````
 etcd
@@ -10,13 +10,15 @@ val传输结构 :
 {
   [
      "url":"http://127.0.0.1:80",
-     "weight":0
+     "weight":0   //权重
   ]
 }
 ````
+* 基于etcd服务发现，利用go-cache做本地缓存
 * 基于httputil.ReverseProxy作url转发，提供ip hash,随机，轮询及权重四种负载均衡模式
 * 目前默认path第一位为对应转发服务，即127.0.0.1:8080/test/get?val=1  test为对应服务
 * 目前提供黑名单&限流中间件
+* 目前提供基于es的转发信息采集
 
 ### 文件结构
 <details>
@@ -28,6 +30,8 @@ val传输结构 :
 ├── config  配置模型相关
 │
 ├── etcd  基于etcd服务发现等逻辑
+│
+├── collector  基于elastic search转发采集等逻辑
 │
 ├── transmit  转发部分逻辑
 │     └── middleware 转发中间件

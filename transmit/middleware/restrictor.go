@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"context"
-	"golang.org/x/time/rate"
-	"simple_proxygateway/config"
 	"time"
+
+	"simple_proxygateway/config"
+
+	"golang.org/x/time/rate"
 )
 
 type restrictor struct {

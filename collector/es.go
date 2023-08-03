@@ -4,12 +4,14 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"github.com/olivere/elastic/v7"
-	"golang.org/x/sync/semaphore"
 	"log"
+	"time"
+
 	"simple_proxygateway/config"
 	"simple_proxygateway/logger"
-	"time"
+
+	"github.com/olivere/elastic/v7"
+	"golang.org/x/sync/semaphore"
 )
 
 type elasticSearch struct {
@@ -27,6 +29,7 @@ var (
 	goroutineLimit        int64 = 100
 	goroutineWeight       int64 = 1
 	sema                        = semaphore.NewWeighted(goroutineLimit)
+	tickerTimeout               = 5
 	goroutineNotEnoughErr       = errors.New("es goroutine not enough")
 )
 
@@ -56,7 +59,7 @@ func (es elasticSearch) new(proxyConfig config.Collector) writer {
 
 func (es elasticSearch) run(ctx context.Context, dataChan <-chan interface{}) {
 	defer es.client.Stop()
-	ticker := time.NewTimer(5 * time.Second)
+	ticker := time.NewTimer(time.Duration(tickerTimeout) * time.Second)
 	for {
 		select {
 		case data := <-dataChan:
