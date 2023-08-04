@@ -52,7 +52,7 @@ func TestTransmitHost(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		urlSilce := []etcd.ServiceUrlStruct{
+		urlSilce := []config.ServiceUrlStruct{
 			{
 				Url:    "127.0.0.1",
 				Weight: 0,

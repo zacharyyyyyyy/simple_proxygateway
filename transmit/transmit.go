@@ -9,34 +9,29 @@ import (
 	"net/http/httputil"
 	"net/url"
 	"regexp"
-	"simple_proxygateway/collector"
-	"simple_proxygateway/config"
-	"simple_proxygateway/transmit/middleware"
 	"strconv"
 	"strings"
 	"time"
 
+	"simple_proxygateway/collector"
+	"simple_proxygateway/config"
 	"simple_proxygateway/etcd"
 	"simple_proxygateway/logger"
+	"simple_proxygateway/transmit/middleware"
 
 	jsoniter "github.com/json-iterator/go"
 	"github.com/patrickmn/go-cache"
 )
 
 type transmitHandler interface {
-	getUrlString(urlSlice []serviceUrlStruct, ip string) string
-}
-
-type serviceUrlStruct struct {
-	url    string
-	weight int
+	getUrlString(urlSlice []config.ServiceUrlStruct, ip string) string
 }
 
 var (
 	transmitHandlerMap          = make(map[string]transmitHandler)
 	localCache                  *cache.Cache
-	localCacheDefaultExpiration = 3
-	localCacheCleanUpTime       = 10
+	localCacheDefaultExpiration = 10
+	localCacheCleanUpTime       = 30
 	defaultUrl                  string
 )
 
@@ -69,11 +64,12 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 				//转发记录采集
 				transmitTime, _ := strconv.Atoi(resp.Request.Header.Get("Transmit-Time"))
 				collector.Write(collector.EsMsg{
-					ServiceName:  resp.Request.Header.Get("Service"),
-					TransmitTime: transmitTime,
-					ResultTime:   int(time.Now().Unix()),
-					Host:         resp.Request.Host,
-					StatusCode:   resp.StatusCode,
+					ServiceName:      resp.Request.Header.Get("Service"),
+					TransmitTime:     transmitTime,
+					ResultTime:       int(time.Now().Unix()),
+					TransmitDuration: int(time.Now().Unix()) - transmitTime,
+					Host:             resp.Request.Host,
+					StatusCode:       resp.StatusCode,
 				})
 			}()
 			return nil
@@ -104,11 +100,12 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 					//转发记录采集
 					transmitTime, _ := strconv.Atoi(r.Header.Get("Transmit-Time"))
 					collector.Write(collector.EsMsg{
-						ServiceName:  r.Header.Get("Service"),
-						TransmitTime: transmitTime,
-						ResultTime:   int(time.Now().Unix()),
-						Host:         r.Host,
-						StatusCode:   errStruct.Code,
+						ServiceName:      r.Header.Get("Service"),
+						TransmitTime:     transmitTime,
+						ResultTime:       int(time.Now().Unix()),
+						TransmitDuration: int(time.Now().Unix()) - transmitTime,
+						Host:             r.Host,
+						StatusCode:       errStruct.Code,
 					})
 				}()
 				errJson, _ := jsoniter.Marshal(errStruct)
@@ -151,6 +148,8 @@ func getRawUrlAndServiceName(reqUrl *url.URL, originRemoteAddr string, loadBalan
 func combineUrl(scheme string, transmitHost string, originPathSlice []string, rawQuery string) string {
 	if scheme != "" {
 		scheme = scheme + "://"
+	} else {
+		scheme = "http://"
 	}
 	pathMix := strings.Join(originPathSlice, "/")
 	if len(pathMix) > 0 {
@@ -177,11 +176,7 @@ func getTransmitHost(ip string, serviceName string, loadBalanceMode string, serv
 	if transmitHandler, ok := transmitHandlerMap[loadBalanceMode]; ok {
 		serviceSlice, err := serviceDiscover.Get(serviceName)
 		if err == nil {
-			urlSlice := make([]serviceUrlStruct, 0)
-			for _, urlStruct := range serviceSlice.ServiceUrlSlice {
-				urlSlice = append(urlSlice, serviceUrlStruct{url: urlStruct.Url, weight: urlStruct.Weight})
-			}
-			hostResult := transmitHandler.getUrlString(urlSlice, ip)
+			hostResult := transmitHandler.getUrlString(serviceSlice.ServiceUrlSlice, ip)
 			localCache.Set(ip+"_"+serviceName, hostResult, time.Duration(localCacheDefaultExpiration)*time.Second)
 			return hostResult
 		}

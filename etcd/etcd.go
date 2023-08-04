@@ -26,11 +26,7 @@ type ServiceDiscover interface {
 
 type (
 	ServiceMapStruct struct {
-		ServiceUrlSlice []ServiceUrlStruct
-	}
-	ServiceUrlStruct struct {
-		Url    string
-		Weight int
+		ServiceUrlSlice []config.ServiceUrlStruct
 	}
 	LocalCache struct {
 		stop          chan struct{}
@@ -122,7 +118,7 @@ func (etcdLocalCache *LocalCache) discoverService(serviceName string, timeout ti
 		logger.Runtime.Error("discover service err:" + err.Error())
 		return
 	}
-	serviceUrlSlice := make([]ServiceUrlStruct, 0)
+	serviceUrlSlice := make([]config.ServiceUrlStruct, 0)
 	for _, val := range res.Kvs {
 		_ = jsoniter.Unmarshal(val.Value, &serviceUrlSlice)
 	}
@@ -169,7 +165,7 @@ func (etcdLocalCache *LocalCache) watch(reverseHost []config.ReverseHost, timeou
 func etcdEventHandle(cache *cache.Cache, events []*clientv3.Event, timeout time.Duration) {
 	for _, ev := range events {
 		if ev.Type == mvccpb.PUT {
-			serviceUrlSlice := make([]ServiceUrlStruct, 0)
+			serviceUrlSlice := make([]config.ServiceUrlStruct, 0)
 			_ = jsoniter.Unmarshal(ev.Kv.Value, &serviceUrlSlice)
 			serviceMapStruct := ServiceMapStruct{
 				ServiceUrlSlice: serviceUrlSlice,

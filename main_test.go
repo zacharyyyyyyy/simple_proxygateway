@@ -48,13 +48,13 @@ func TestEtcd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		urlSilce := []etcd.ServiceUrlStruct{
+		urlSilce := []config.ServiceUrlStruct{
 			{
-				Url:    "127.0.0.1:80",
+				Url:    "127.0.0.1:9091",
 				Weight: 0,
 			},
 			{
-				Url:    "127.0.0.4:80",
+				Url:    "127.0.0.1:9092",
 				Weight: 1,
 			},
 		}
@@ -84,7 +84,7 @@ func TestEtcd(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		urlSilce := []etcd.ServiceUrlStruct{
+		urlSilce := []config.ServiceUrlStruct{
 			{
 				Url:    "127.0.0.1:80",
 				Weight: 0,
@@ -121,6 +121,36 @@ func TestTransmit(t *testing.T) {
 	ServiceDiscover := etcd.NewEtcd(*proxyConfig)
 	proxy := transmit.NewProxyHandler(ServiceDiscover, proxyConfig.LoadBalanceMode, *proxyConfig)
 	initRouter(proxy)
+	Convey("add es data", t, func() {
+		respL, err := etcdHandler.Grant(context.TODO(), 30)
+		if err != nil {
+			t.Fatal(err)
+		}
+		urlSlice := []config.ServiceUrlStruct{
+			{
+				Url:    "127.0.0.1:8086",
+				Weight: 0,
+			},
+		}
+		jsonStr, _ := jsoniter.Marshal(urlSlice)
+		_, err = etcdHandler.Put(context.TODO(), proxyConfig.ReverseHost[0].ServiceName, string(jsonStr), clientv3.WithLease(respL.ID))
+		if err != nil {
+			t.Fatal(err)
+		}
+		localData, err := ServiceDiscover.Get(proxyConfig.ReverseHost[0].ServiceName)
+		localEsData := localData.ServiceUrlSlice
+		if err != nil {
+			t.Fatal(err)
+		}
+		shouldFunc := func(actual interface{}, expected ...interface{}) string {
+			if !reflect.DeepEqual(actual, expected[0]) {
+				return fmt.Sprintf("excepted:%v, got:%v", expected[0], actual)
+			}
+			return ""
+		}
+		So(localEsData, shouldFunc, urlSlice)
+	})
+
 	testsStruct := []struct {
 		testName string
 		method   string
@@ -130,7 +160,7 @@ func TestTransmit(t *testing.T) {
 		{
 			testName: "transmit test",
 			method:   "POST",
-			target:   "/te/st?key=1&key1=2",
+			target:   "/test/st?key=1&key1=2",
 			code:     404,
 		},
 	}
@@ -145,9 +175,10 @@ func TestTransmit(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			time.Sleep(7 * time.Second)
 			So(w.Code, ShouldEqual, testsRow.code)
 
 		})
 	}
+	//等待es写入
+	time.Sleep(7 * time.Second)
 }

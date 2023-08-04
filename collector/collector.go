@@ -18,11 +18,12 @@ type (
 		run(ctx context.Context, dataChan <-chan interface{})
 	}
 	EsMsg struct {
-		ServiceName  string
-		TransmitTime int
-		ResultTime   int
-		Host         string
-		StatusCode   int
+		ServiceName      string
+		TransmitTime     int
+		ResultTime       int
+		TransmitDuration int
+		Host             string
+		StatusCode       int
 	}
 )
 

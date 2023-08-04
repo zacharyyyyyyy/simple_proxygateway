@@ -13,8 +13,8 @@ func init() {
 	register(config.LoadBalanceModeIpHash, &ipHashTransmit{})
 }
 
-func (ipHashTransmit ipHashTransmit) getUrlString(urlSlice []serviceUrlStruct, ip string) string {
+func (ipHashTransmit ipHashTransmit) getUrlString(urlSlice []config.ServiceUrlStruct, ip string) string {
 	sliceLen := len(urlSlice)
 	ipHash := crc32.ChecksumIEEE([]byte(ip))
-	return urlSlice[int(ipHash)%sliceLen].url
+	return urlSlice[int(ipHash)%sliceLen].Url
 }

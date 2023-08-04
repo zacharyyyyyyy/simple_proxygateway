@@ -15,12 +15,12 @@ func init() {
 
 var currentIndex int32 = 0
 
-func (roundRobinTransmit) getUrlString(urlSlice []serviceUrlStruct, ip string) string {
+func (roundRobinTransmit) getUrlString(urlSlice []config.ServiceUrlStruct, ip string) string {
 	sliceLen := len(urlSlice)
 	if currentIndex > int32(sliceLen) {
 		atomic.StoreInt32(&currentIndex, 0)
 	}
 	index := atomic.AddInt32(&currentIndex, 1) % int32(sliceLen)
-	return urlSlice[index].url
+	return urlSlice[index].Url
 
 }

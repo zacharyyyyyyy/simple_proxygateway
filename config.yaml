@@ -1,7 +1,7 @@
 timeout: 60
 port: ":8887"
 default_url: "http://127.0.0.1:9090"
-load_balance_mode: "rand"
+load_balance_mode: "random"
 ip_table: []
 open_collector: true
 collector:

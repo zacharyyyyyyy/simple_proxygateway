@@ -71,6 +71,11 @@ const (
 	LoadBalanceModeRoundRobin = "round_robin"
 )
 
+type ServiceUrlStruct struct {
+	Url    string
+	Weight int
+}
+
 func LoadConf(config *Client, configFileName string) {
 	var f *os.File
 	f, err := os.Open(configFileName)
