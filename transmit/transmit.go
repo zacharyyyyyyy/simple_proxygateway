@@ -28,15 +28,20 @@ type transmitHandler interface {
 }
 
 var (
-	transmitHandlerMap          = make(map[string]transmitHandler)
-	localCache                  *cache.Cache
-	localCacheDefaultExpiration = 10
-	localCacheCleanUpTime       = 30
-	defaultUrl                  string
+	transmitHandlerMap           = make(map[string]transmitHandler)
+	localCache                   *cache.Cache
+	localCacheDefaultExpiration  = 10
+	localCacheCleanUpTime        = 30
+	defaultUrl                   string
+	transmitErrorMaxCount        = 5
+	errorCache                   *cache.Cache
+	errorCacheDefaultExpiration  = 300
+	errorCacheDefaultCleanUpTime = 600
 )
 
 func init() {
 	localCache = cache.New(time.Duration(localCacheDefaultExpiration)*time.Second, time.Duration(localCacheCleanUpTime)*time.Second)
+	errorCache = cache.New(time.Duration(errorCacheDefaultExpiration)*time.Second, time.Duration(errorCacheDefaultCleanUpTime)*time.Second)
 }
 
 func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode string, proxyConfig config.Client) http.Handler {
@@ -96,17 +101,30 @@ func NewProxyHandler(serviceDiscover etcd.ServiceDiscover, loadBalanceMode strin
 					errStruct.Data = ""
 					errStruct.Code = http.StatusNotFound
 				}
+				serviceName := r.Header.Get("Service")
 				go func() {
 					//转发记录采集
 					transmitTime, _ := strconv.Atoi(r.Header.Get("Transmit-Time"))
 					collector.Write(collector.EsMsg{
-						ServiceName:      r.Header.Get("Service"),
+						ServiceName:      serviceName,
 						TransmitTime:     transmitTime,
 						ResultTime:       int(time.Now().Unix()),
 						TransmitDuration: int(time.Now().Unix()) - transmitTime,
 						Host:             r.Host,
 						StatusCode:       errStruct.Code,
 					})
+				}()
+				go func() {
+					//失败统计 放弃强约束降低锁冲突
+					if errorCount, ok := errorCache.Get(serviceName); ok {
+						if errorCount.(int)+1 >= transmitErrorMaxCount {
+							serviceDiscover.Delete(serviceName)
+						} else {
+							_ = errorCache.Increment(serviceName, 1)
+						}
+					} else {
+						_ = errorCache.Add(serviceName, 1, time.Duration(errorCacheDefaultExpiration)*time.Second)
+					}
 				}()
 				errJson, _ := jsoniter.Marshal(errStruct)
 				w.Write(errJson)

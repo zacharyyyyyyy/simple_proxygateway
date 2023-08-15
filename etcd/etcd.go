@@ -21,6 +21,7 @@ import (
 type ServiceDiscover interface {
 	Get(serviceName string) (ServiceMapStruct, error)
 	Exit()
+	Delete(serviceName string)
 	discoverAllServices(serviceConfig config.Client)
 }
 
