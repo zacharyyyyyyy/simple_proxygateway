@@ -82,8 +82,21 @@ func (es elasticSearch) run(ctx context.Context, dataChan <-chan interface{}) {
 				}(bulkData)
 			}
 		case <-ticker.C:
+			if ok := sema.TryAcquire(goroutineWeight); ok != true {
+				logger.Runtime.Error(goroutineNotEnoughErr.Error())
+				continue
+			}
 			//清空剩余data
-			es.bulkCreate(elasticHandler.dataSlice)
+			bulkData := elasticHandler.dataSlice[:]
+			elasticHandler.dataSlice = make([]interface{}, 0, 20)
+			go func(bulkData []interface{}) {
+				defer sema.Release(goroutineWeight)
+				es.bulkCreate(bulkData)
+			}(bulkData)
+			if ctx.Err() != nil {
+				logger.Runtime.Info("elasticsearch client close!")
+				return
+			}
 		case <-ctx.Done():
 			//清空剩余data
 			es.bulkCreate(elasticHandler.dataSlice)
